@@ -1,0 +1,39 @@
+func printnum(a) do
+	var temp
+	if a >= 100 then
+		temp = a // 100
+		write temp + '0'
+		temp = temp * 100
+		a = a - temp
+	endif
+	if a >= 10 then
+		temp = a // 10
+		write temp + '0'
+		temp = temp * 10
+		a = a - temp
+	endif
+	write a + '0'
+endfunc
+
+func double(a) do
+	a = a*2
+endfunc
+
+
+var a = 7
+var b = 8
+
+a = a*b
+call printnum(a)
+write 10
+
+call double(a) -> b
+call printnum(b)
+write 10
+
+
+call double(b) -> a
+call printnum(a)
+write 10
+
+

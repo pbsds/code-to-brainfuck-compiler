@@ -1,0 +1,98 @@
+func do_test() do
+	var in
+	var a
+	var b
+
+	read in
+	a = in - '0'
+	read in
+	b = in - '0'
+
+
+	if a > b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '>'
+	write b + '0'
+	write 10
+
+	if a >= b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '>'
+	write '='
+	write b + '0'
+	write 10
+
+	if a < b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '<'
+	write b + '0'
+	write 10
+
+	if a <= b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '<'
+	write '='
+	write b + '0'
+	write 10
+
+	if a == b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '='
+	write '='
+	write b + '0'
+	write 10
+
+	if a != b then
+	else
+		write 'n'
+		write 'o'
+		write 't'
+		write ' '
+	endif
+	write a + '0'
+	write '!'
+	write '='
+	write b + '0'
+	write 10
+	
+	write 10
+endfunc
+
+var times
+read times
+times = times - '0'
+
+while times do
+	times = times - 1
+	call do_test()
+endwhile

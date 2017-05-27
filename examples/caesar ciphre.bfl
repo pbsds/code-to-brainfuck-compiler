@@ -1,0 +1,63 @@
+#stdin syntax:
+#[textlen:int] [rotate_amoun:int] [text]
+
+#try with this as stdin:
+#43 23 THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG
+#should produce: QEB NRFZH YOLTK CLU GRJMP LSBO QEB IXWV ALD
+
+
+func do_caesar(rotate) do
+	var char
+	read char
+	
+	#to uppercase
+	var diff = 'a' - 'A'
+	if char >= 'a' then
+		if char <= 'z' then
+			char = char - diff
+		endif
+	endif
+	
+	if char >= 'A' then
+		if char <= 'Z' then
+			char = char - 'A'
+			
+			char = char + rotate
+			while char >= 26 do
+				char = char - 26
+			endwhile
+			
+			write char + 'A'
+		else
+			write char
+		endif
+	else
+		write char
+	endif
+endfunc
+
+var char
+
+var times = 0
+read char
+while char != ' ' do
+	times = times * 10
+	char = char - '0'
+	times = times + char
+	read char
+endwhile
+
+var rotate = 0
+read char
+while char != ' ' do
+	rotate = rotate * 10
+	char = char - '0'
+	rotate = rotate + char
+	read char
+endwhile
+
+while times do
+	times = times - 1
+	call do_caesar(rotate)
+endwhile
+

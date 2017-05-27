@@ -1,0 +1,44 @@
+var width  = 80
+var height = 80
+var radius = 35
+
+var centerx = width // 2
+var centery = height // 2
+
+var x = 0
+var y = 0
+var dys
+var dxs
+var dist
+radius = radius * radius
+while y < height do
+	if y < centery then
+		dys = centery - y
+	else
+		dys = y - centery
+	endif
+	dys = dys * dys
+	
+	x = 0
+	while x < width do
+		if x < centerx then
+			dxs = centerx - x
+		else
+			dxs = x - centerx
+		endif
+		dxs = dxs * dxs
+		
+		dist = dys + dxs 
+		
+		if dist > radius then
+			write '.'
+		else
+			write '%'
+		endif
+		
+		x = x + 1
+	endwhile
+	
+	write 10
+	y = y + 1
+endwhile
