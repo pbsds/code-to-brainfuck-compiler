@@ -1,18 +1,16 @@
 func printnum(a) do
-	var temp
-	if a >= 100 then
-		temp = a // 100
-		write temp + '0'
-		temp = temp * 100
-		a = a - temp
+	var	temp = 0
+	while a >= 10 do
+		increment temp
+		decrement a 10
+	endwhile
+	if temp then
+		increment temp '0'
+		write temp
 	endif
-	if a >= 10 then
-		temp = a // 10
-		write temp + '0'
-		temp = temp * 10
-		a = a - temp
-	endif
-	write a + '0'
+	
+	increment a '0'
+	write a
 endfunc
 
 var current = 0
@@ -20,9 +18,9 @@ var threes = 0
 var fives = 0
 
 while current < 100 do
-	current = current + 1
-	threes = threes + 1
-	fives = fives + 1
+	increment current
+	increment threes
+	increment fives
 	
 	if threes == 3 then
 		threes = 0

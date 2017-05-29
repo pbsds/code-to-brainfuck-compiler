@@ -1,0 +1,33 @@
+func printnum(a) do
+	var	temp = 0
+	while a >= 10 do
+		increment temp
+		decrement a 10
+	endwhile
+	if temp then
+		increment temp '0'
+		write temp
+	endif
+	
+	increment a '0'
+	write a
+endfunc
+
+array table 10
+var i = 0
+
+var temp
+while i != 10 do
+	temp = i * i
+	store temp -> table i
+	increment i
+endwhile
+
+i = 0
+while i != 10 do
+	fetch table i -> temp
+	increment i
+	
+	call printnum(temp)
+	write 10
+endwhile

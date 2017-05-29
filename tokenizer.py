@@ -40,6 +40,11 @@ STATEMENTS = frozenset((
 	"call",
 	"write",
 	"read",
+	"increment",
+	"decrement",
+	"array",
+	"fetch",
+	"store",
 ))
 VALUE_wildchar = None
 class Character(int):#helps with debugging

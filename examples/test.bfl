@@ -1,0 +1,15 @@
+
+func test(a) do
+	var b = 3
+
+
+	while a < 155 do
+		write a // b
+		write 10
+		
+		increment a
+	endwhile
+endfunc
+
+call test(144)
+call test(144)

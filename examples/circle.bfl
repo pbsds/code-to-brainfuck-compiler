@@ -1,5 +1,5 @@
-var width  = 80
-var height = 80
+var width  = 70
+var height = 70
 var radius = 35
 
 var centerx = width // 2
@@ -11,6 +11,7 @@ var dys
 var dxs
 var dist
 radius = radius * radius
+
 while y < height do
 	if y < centery then
 		dys = centery - y

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 from tokenizer import Character
 from compiler import Brainfuck as BF
+from random import shuffle
+import itertools
 
-MAX_INT = 0xFF
-REG_A = "\0A"#variable names assigned to temporary helper variables
-REG_B = "\0B"
-REG_C = "\0C"
-REG_D = "\0D"
+MAX_INT = 0xFF#remove this? Only used when precalculating values...
+REG_helper = "\0HELP"#variable names assigned to temporary helper variables
 REG_calc = "\0CALC"
 
 class ProgrammingError(Exception):
@@ -20,64 +19,109 @@ def is_actual_value(i):
 
 class Program:
 	def __init__(self, function_parameter=None):
-		self.names = set((REG_A, REG_B, REG_C, REG_D, REG_calc))
+		self.names = set(("\0A", "\0B", "\0C", "\0D", REG_calc))
 		if function_parameter:
 			self.names.add(function_parameter)
 		self.function_parameter = function_parameter#the name. will always have position 0
-		
+		#names is a set of the declared variable names, and will be mapped to locations in memory on compile
+		#hidden values are also assigned names that will not fit within "".isalpha() which is enforced in the tokenizer
+		#	names starting with "\0" are helper registers. "\0HELP" is special as it will be converted to the closes available
+		#	names starting with "\1" are the names of stored constants. "\142" stores the value 42
+		#	names starting with "\2" are reserved for if statements
+		#	names starting with "\3" are reserved for array contents
+		#	the name "\xfftail_of_stack" points to the position behind the last value on the stack. This is the position where a new stack wil be built
 		self.actions = []#[i] = (Brainfuck.function, args) where args is a tuple of either values or names(str) which gets converted to pos
 		
 		self.if_blocks = []#[i] = bool(whether ELSE has been used or not yet)
 		self.while_blocks = []#value (expression)
+		self.arrays = {}#"name" : size
 		
-		self.functions = {}
+		self.functions = {}#"name" : Program()
 	def compile(self, do_clean_stack=False, include_debug=False):
 		if self.if_blocks:
 			raise CompilingError(f"There are {len(self.if_blocks)} unterminated IF blocks in program")
 		
-		out = BF()
+		if hasattr(self, "_ret"):
+			return self._ret
 		
-		#choose variable positions:
-		var_position = {}
-		left = list(range(len(self.names)))
-		if self.function_parameter:
-			var_position[self.function_parameter] = left.pop(0)
-		for i in self.names:
-			if i != self.function_parameter:
-				var_position[i] = left.pop(0)
-		var_position["\xfftail_of_stack"] = len(self.names)
-		
-		#compile actions:
-		for i, (func, args) in enumerate(self.actions):
-			if func in (BF.write_raw, BF.write_raw_debug):
-				if func is BF.write_raw_debug and not include_debug: continue
-				func(out, args)
-				continue
+		ret = None
+		attempts_left = 51
+		while attempts_left:
+			attempts_left -= 1
+			out = BF()
 			
-			assert type(args) is tuple, (func, args)
-			assert hasattr(func, "__call__"), (func, args)
-			
-			real_args = [i if type(i) is not str else var_position[i] for i in args]
-			try:
-				func(out, *real_args)
-			except Exception as e:
-				e.args = (f"{e.args[0]}\n\nIn Program.compile: func = {func.__name__}, real_args = {real_args}",)
-				raise e
-				
-		#compile stack cleansment:
-		if do_clean_stack:
-			to_clean = list(range(len(self.names)))
+			#choose random variable positions:
+			var_position = {}
+			left = list(range(len(self.names)))
 			if self.function_parameter:
-				to_clean.pop(0)
-			for i in to_clean[::-1]:
-				out.clear(i)
+				var_position[self.function_parameter] = left.pop(0)
+			shuffle(left)
+			for i in self.names:
+				if i != self.function_parameter:
+					var_position[i] = left.pop(0)
+			var_position["\xfftail_of_stack"] = len(self.names)
+			
+			#compile actions:
+			for i, (func, args) in enumerate(self.actions):
+				if func in (BF.write_raw, BF.write_raw_debug):
+					if func is BF.write_raw_debug and not include_debug: continue
+					func(out, args)
+					continue
+				
+				assert type(args) is tuple, (func, args)
+				assert hasattr(func, "__call__"), (func, args)
+				
+				helper_registers = ("\0A", "\0B", "\0C", "\0D")
+				bestlen = None
+				bestargs = None
+				for helpers in itertools.permutations(helper_registers, args.count(REG_helper)):
+					hpos = 0
+					real_args = []
+					for i in args:
+						if i == REG_helper:
+							real_args.append(var_position[helpers[hpos]])
+							hpos += 1
+						elif type(i) is not str:
+							real_args.append(i)
+						else:
+							real_args.append(var_position[i])
+					
+					out.set_waypoint()
+					try:
+						func(out, *real_args)
+					except Exception as e:
+						e.args = (f"{e.args[0]}\n\nIn Program.compile: func = {func.__name__}, real_args = {real_args}",)
+						raise e
+					
+					if bestlen is None:
+						bestlen = out.waypoint_diff()
+						bestargs = real_args
+					elif out.waypoint_diff() < bestlen:
+						bestargs = real_args
+					out.restore_waypoint()
+				
+				func(out, *bestargs)
+			
+			#compile stack cleansment:
+			if do_clean_stack:
+				to_clean = list(range(len(self.names)))
+				if self.function_parameter:
+					to_clean.pop(0)
+				for i in to_clean[::-1]:
+					out.clear(i)
+			
+			out.goto(0)
+			
+			out = out.pack()
+			
+			if not ret:
+				ret = out
+			elif len(out) < len(ret):
+				attempts_left = 50
+				ret = out
 		
-		out.goto(0)
-		
-		if include_debug:
-			return out.pack()
-		else:
-			return out.remove_redundancies(out.pack())
+		self._ret = ret
+		return ret
 	#used to convert a simple calculation to a action+value:
 	def calculation_to_value(self, par1, oper, par2):#returns either an int or (action, outputpos)
 		if oper in ("=", "->", "(", ")"):
@@ -94,7 +138,7 @@ class Program:
 			if oper == ">" : return int(par1 >  par2)
 			if oper == "<" : return int(par1 <  par2)
 			if oper == "!=": return int(par1 != par2)
-			raise ProgrammingError(f"Unknown operator {oper!r} encountered during precalc of calculation of known values")
+			raise ProgrammingError(f"Illegal operator {oper!r} encountered during precalc of calculation of known values")
 		
 		#at least one variable parameter:
 		if is_actual_value(par1):
@@ -102,23 +146,24 @@ class Program:
 		if is_actual_value(par2):
 			par2 = self.store_value(par2)
 		
-		if oper == "+" : return (BF.add,                      (par1, par2, REG_calc, REG_A)),                      REG_calc
-		if oper == "-" : return (BF.subtract,                 (par1, par2, REG_calc, REG_A)),                      REG_calc
-		if oper == "*" : return (BF.multiply,                 (par1, par2, REG_calc, REG_A, REG_B, REG_C)),        REG_calc
-		if oper == "//": return (BF.floor_divide,             (par1, par2, REG_calc, REG_A, REG_B, REG_C, REG_D)), REG_calc
-		if oper == "==": return (BF.is_equal,                 (par1, par2, REG_calc, REG_A, REG_B)),               REG_calc
-		if oper == "<=": return (BF.is_greater_than_or_equal, (par2, par1, REG_calc, REG_A, REG_B, REG_C, REG_D)), REG_calc
-		if oper == ">=": return (BF.is_greater_than_or_equal, (par1, par2, REG_calc, REG_A, REG_B, REG_C, REG_D)), REG_calc
-		if oper == "<" : return (BF.is_greater_than,          (par2, par1, REG_calc, REG_A, REG_B, REG_C, REG_D)), REG_calc
-		if oper == ">" : return (BF.is_greater_than,          (par1, par2, REG_calc, REG_A, REG_B, REG_C, REG_D)), REG_calc
-		if oper == "!=": return (BF.is_not_equal,             (par1, par2, REG_calc, REG_A, REG_B)),               REG_calc
+		if oper == "+" : return (BF.add,                      (par1, par2, REG_calc, REG_helper)),                                     REG_calc
+		if oper == "-" : return (BF.subtract,                 (par1, par2, REG_calc, REG_helper)),                                     REG_calc
+		if oper == "*" : return (BF.multiply,                 (par1, par2, REG_calc, REG_helper, REG_helper, REG_helper)),             REG_calc
+		if oper == "//": return (BF.floor_divide,             (par1, par2, REG_calc, REG_helper, REG_helper, REG_helper, REG_helper)), REG_calc
+		if oper == "==": return (BF.is_equal,                 (par1, par2, REG_calc, REG_helper, REG_helper)),                         REG_calc
+		if oper == "<=": return (BF.is_greater_than_or_equal, (par2, par1, REG_calc, REG_helper, REG_helper, REG_helper, REG_helper)), REG_calc
+		if oper == ">=": return (BF.is_greater_than_or_equal, (par1, par2, REG_calc, REG_helper, REG_helper, REG_helper, REG_helper)), REG_calc
+		if oper == "<" : return (BF.is_greater_than,          (par2, par1, REG_calc, REG_helper, REG_helper, REG_helper, REG_helper)), REG_calc
+		if oper == ">" : return (BF.is_greater_than,          (par1, par2, REG_calc, REG_helper, REG_helper, REG_helper, REG_helper)), REG_calc
+		if oper == "!=": return (BF.is_not_equal,             (par1, par2, REG_calc, REG_helper, REG_helper)),                         REG_calc
+		raise ProgrammingError(f"Illegal operator {oper!r} encountered in calculation")
 	def store_value(self, value):#declare value, returns a name
 		assert is_actual_value(value)
 		
 		name = "\1%i" % int(value)
 		if name not in self.names:
 			self.names.add(name)
-			self.actions.insert(0, (BF.set_to, (name, value, REG_A)))
+			self.actions.insert(0, (BF.increment, (name, value, REG_helper)))
 		
 		return name
 	def add_var(self, name):#declare a variable
@@ -126,19 +171,28 @@ class Program:
 			self.names.add(name)
 		else:
 			raise ProgrammingError(f"The var {name!r} was declared twice!")
-	#append a action:
+	def add_array(self, name, size):#declare a array
+		if name in self.arrays:
+			raise ProgrammingError(f"The array {name!r} was declared twice!")
+		if size <= 0:
+			raise ProgrammingError(f"The array {name!r} was declared with the illegal size {size}")
+		
+		self.arrays[name] = size
+		for i in range(size):
+			self.names.add(f"\3{name}-{i}")
+	#append an action:
 	def add_assign(self, name, value):
 		assert name in self.names, (name, self.names)
 		self.actions.append((BF.write_raw_debug, "\n\nadd_assign:\n"))
 		
 		if is_actual_value(value):
-			self.actions.append((BF.set_to, (name, value, REG_A)))
+			self.actions.append((BF.set_to, (name, value, REG_helper)))
 		elif type(value) is str:
-			self.actions.append((BF.copy_to, (value, name, REG_A)))
+			self.actions.append((BF.copy_to, (value, name, REG_helper)))
 		else:
 			value_action, value_dest = value
 			self.actions.append(value_action)
-			self.actions.append((BF.copy_to, (value_dest, name, REG_A)))
+			self.actions.append((BF.copy_to, (value_dest, name, REG_helper)))
 	def add_function(self, name, program):
 		if name in self.functions:
 			raise ProgrammingError(f"The function name {name!r} has been used!")
@@ -205,10 +259,8 @@ class Program:
 		elif value not in self.names:
 			raise ProgrammingError(f"{value!r} used before declaration")
 		
-		
-		
 		self.actions.append((BF.while_do, (value,)))
-	def add_endwhile(self):#todo
+	def add_endwhile(self):
 		self.actions.append((BF.write_raw_debug, "\n\nadd_endwhile:\n"))
 		
 		value = self.while_blocks.pop(-1)
@@ -242,12 +294,11 @@ class Program:
 		offset = "\xfftail_of_stack"
 		
 		if value != None:
-			self.actions.append((BF.copy_to, (value, offset, REG_A)))
+			self.actions.append((BF.copy_to, (value, offset, REG_helper)))
 		self.actions.append((BF.goto, (offset,)))
 		
-		#self.actions.append((program.compile, ()))
 		self.actions.append((BF.write_func_output, (program.compile, (True,))))
-				
+		
 		if returninto:
 			self.actions.append((BF.move_to, (offset, returninto)))
 	def add_read(self, name):
@@ -265,3 +316,87 @@ class Program:
 			action, outputpos = value
 			self.actions.append(action)
 			self.actions.append((BF.write, (outputpos,)))
+	def add_increment(self, name, amount = 1):
+		assert name in self.names, (name, self.names)
+		self.actions.append((BF.write_raw_debug, "\n\nadd_increment:\n"))
+		
+		self.actions.append((BF.increment, (name, amount, REG_helper)))
+	def add_decrement(self, name, amount = 1):
+		assert name in self.names, (name, self.names)
+		self.actions.append((BF.write_raw_debug, "\n\aadd_decrement:\n"))
+		
+		self.actions.append((BF.decrement, (name, amount, REG_helper)))
+	def add_fetch(self, arrayname, indexvalue, destname):#assumes a wrapping brainfuck implementation
+		self.actions.append((BF.write_raw_debug, "\n\aadd_fetch:\n"))
+		
+		if arrayname not in self.arrays:
+			raise ProgrammingError(f"Tried fetching from undeclared array {arrayname!r}")
+		if destname not in self.names:
+			raise ProgrammingError(f"Tried storing fetch result into undeclared variable {destname!r}")
+		
+		if is_actual_value(indexvalue):#if index is known:
+			if indexvalue < 0 or indexvalue >= self.arrays[arrayname]:
+				raise ProgrammingError(f"Tried accessing array {arrayname!r} with invalid index {indexvalue!r}")
+			
+			self.actions.append((BF.copy_to, (f"\3{arrayname}-{int(indexvalue)}", destname, REG_helper)))
+		else:
+			arraysize = self.arrays[arrayname]
+			for i in range(arraysize):
+				self.add_if(indexvalue)
+				self.add_else()#if indexvalue - i == 0
+				
+				#copy this array position
+				self.actions.append((BF.copy_to, (f"\3{arrayname}-{i}", destname, REG_helper)))
+				
+				self.add_endif()
+				
+				self.add_decrement(indexvalue)#i++
+			
+			#cleanup
+			self.add_increment(indexvalue, arraysize)
+		
+		self.actions.append((BF.write_raw_debug, "\n\aadd_fetch end\n"))
+	def add_store(self, value, arrayname, indexvalue):
+		self.actions.append((BF.write_raw_debug, "\n\aadd_store:\n"))
+		
+		if arrayname not in self.arrays:
+			raise ProgrammingError(f"Tried storing to undeclared array {arrayname!r}")
+		
+		if is_actual_value(indexvalue):#if index is known:
+			if indexvalue < 0 or indexvalue >= self.arrays[arrayname]:
+				raise ProgrammingError(f"Tried accessing array {arrayname!r} with invalid index {indexvalue!r}")
+			
+			if is_actual_value(value):
+				self.actions.append((BF.set_to, (f"\3{arrayname}-{int(indexvalue)}", value, REG_helper)))
+			else:
+				assert type(value) is str
+				if value not in self.names:
+					raise ProgrammingError(f"Undeclared variable {value!r}")
+				
+				self.actions.append((BF.copy_to, (value, f"\3{arrayname}-{int(indexvalue)}", REG_helper)))
+		else:#index unknown
+			assert type(indexvalue) is str
+			if indexvalue not in self.names:
+				raise ProgrammingError(f"Undeclared variable {indexvalue!r}")
+			
+			self.actions.append((BF.copy_to, (indexvalue, REG_calc, REG_helper)))
+			
+			arraysize = self.arrays[arrayname]
+			for i in range(arraysize):
+				self.add_if(REG_calc)
+				self.add_else()#if indexvalue - i == 0
+				
+				#store to array position
+				if is_actual_value(value):
+					self.actions.append((BF.set_to, (f"\3{arrayname}-{i}", value, REG_helper)))
+				else:
+					self.actions.append((BF.copy_to, (value, f"\3{arrayname}-{i}", REG_helper)))
+				
+				self.add_endif()
+				
+				self.add_decrement(REG_calc)#i++
+			
+			#cleanup
+			self.add_increment(REG_calc, arraysize)
+		self.actions.append((BF.write_raw_debug, "\n\aadd_store end\n"))
+		

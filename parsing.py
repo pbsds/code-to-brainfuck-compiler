@@ -3,29 +3,35 @@ from tokenizer import Token as T, Expression, VALUE_wildchar
 from program import Program, ProgrammingError
 
 #T expression patterns:
-EX_func1    = Expression(T.func, T.any_name, T.oper_sbracket, T.oper_ebracket, T.do)
-EX_func2    = Expression(T.func, T.any_name, T.oper_sbracket, T.any_name, T.oper_ebracket, T.do)
-EX_endfunc  = Expression(T.endfunc)
-EX_if1      = Expression(T.if_, T.any_parameter, T.any_oper, T.any_parameter, T.then)
-EX_if2      = Expression(T.if_, T.any_name, T.then)
-EX_else     = Expression(T.else_)
-EX_endif    = Expression(T.endif)
-EX_while1   = Expression(T.while_, T.any_parameter, T.any_oper, T.any_parameter, T.do)
-EX_while2   = Expression(T.while_, T.any_name, T.do)
-EX_endwhile = Expression(T.endwhile)
-EX_var1     = Expression(T.var, T.any_name)
-EX_var2     = Expression(T.var, T.any_name, T.oper_assign, T.any_parameter)
-EX_var3     = Expression(T.var, T.any_name, T.oper_assign, T.any_parameter, T.any_oper, T.any_parameter)
-EX_assign1  = Expression(T.any_name, T.oper_assign, T.any_parameter)
-EX_assign2  = Expression(T.any_name, T.oper_assign, T.any_parameter, T.any_oper, T.any_parameter)
-EX_call1    = Expression(T.call, T.any_name, T.oper_sbracket, T.oper_ebracket)
-EX_call2    = Expression(T.call, T.any_name, T.oper_sbracket, T.any_parameter, T.oper_ebracket)
-EX_call3    = Expression(T.call, T.any_name, T.oper_sbracket, T.oper_ebracket, T.oper_write_to, T.any_name)
-EX_call4    = Expression(T.call, T.any_name, T.oper_sbracket, T.any_parameter, T.oper_ebracket, T.oper_write_to, T.any_name)
-EX_read     = Expression(T.read, T.any_name)
-EX_write1   = Expression(T.write, T.any_parameter)
-EX_write2   = Expression(T.write, T.any_parameter, T.any_oper, T.any_parameter)
-
+EX_func1      = Expression(T.func, T.any_name, T.oper_sbracket, T.oper_ebracket, T.do)
+EX_func2      = Expression(T.func, T.any_name, T.oper_sbracket, T.any_name, T.oper_ebracket, T.do)
+EX_endfunc    = Expression(T.endfunc)
+EX_if1        = Expression(T.if_, T.any_parameter, T.any_oper, T.any_parameter, T.then)
+EX_if2        = Expression(T.if_, T.any_name, T.then)
+EX_else       = Expression(T.else_)
+EX_endif      = Expression(T.endif)
+EX_while1     = Expression(T.while_, T.any_parameter, T.any_oper, T.any_parameter, T.do)
+EX_while2     = Expression(T.while_, T.any_name, T.do)
+EX_endwhile   = Expression(T.endwhile)
+EX_var1       = Expression(T.var, T.any_name)
+EX_var2       = Expression(T.var, T.any_name, T.oper_assign, T.any_parameter)
+EX_var3       = Expression(T.var, T.any_name, T.oper_assign, T.any_parameter, T.any_oper, T.any_parameter)
+EX_assign1    = Expression(T.any_name, T.oper_assign, T.any_parameter)
+EX_assign2    = Expression(T.any_name, T.oper_assign, T.any_parameter, T.any_oper, T.any_parameter)
+EX_call1      = Expression(T.call, T.any_name, T.oper_sbracket, T.oper_ebracket)
+EX_call2      = Expression(T.call, T.any_name, T.oper_sbracket, T.any_parameter, T.oper_ebracket)
+EX_call3      = Expression(T.call, T.any_name, T.oper_sbracket, T.oper_ebracket, T.oper_write_to, T.any_name)
+EX_call4      = Expression(T.call, T.any_name, T.oper_sbracket, T.any_parameter, T.oper_ebracket, T.oper_write_to, T.any_name)
+EX_read       = Expression(T.read, T.any_name)
+EX_write1     = Expression(T.write, T.any_parameter)
+EX_write2     = Expression(T.write, T.any_parameter, T.any_oper, T.any_parameter)
+EX_increment1 = Expression(T.increment, T.any_name)
+EX_increment2 = Expression(T.increment, T.any_name, T.any_value)
+EX_decrement1 = Expression(T.decrement, T.any_name)
+EX_decrement2 = Expression(T.decrement, T.any_name, T.any_value)
+EX_array      = Expression(T.array, T.any_name, T.any_value)
+EX_fetch      = Expression(T.fetch, T.any_name, T.any_parameter, T.oper_write_to, T.any_name)
+EX_store      = Expression(T.store, T.any_parameter, T.oper_write_to, T.any_name, T.any_parameter)
 
 class ParseError(Exception):
 	def __init__(self, ex, description):
@@ -115,6 +121,20 @@ def parse_expressions(expressions, top_level=True, parameter=None):
 			elif ex == EX_write2:
 				par1, oper, par2 = ex[1:4]
 				out.add_write(out.calculation_to_value(par1[1], oper[1], par2[1]))
+			elif ex == EX_increment1:
+				out.add_increment(ex[1][1])
+			elif ex == EX_increment2:
+				out.add_increment(ex[1][1], ex[2][1])
+			elif ex == EX_decrement1:
+				out.add_decrement(ex[1][1])
+			elif ex == EX_decrement2:
+				out.add_decrement(ex[1][1], ex[2][1])
+			elif ex == EX_array:
+				out.add_array(ex[1][1], ex[2][1])
+			elif ex == EX_fetch:
+				out.add_fetch(ex[1][1], ex[2][1], ex[4][1])
+			elif ex == EX_store:
+				out.add_store(ex[1][1], ex[3][1], ex[4][1])
 			else:
 				raise ParseError(ex, "Syntax unrecognized")
 		except ProgrammingError as e:

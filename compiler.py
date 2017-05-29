@@ -1,25 +1,89 @@
 #!/usr/bin/env python3
 from math import sqrt
+from collections import defaultdict
+
+def reflow(bytecode):#not fully working for some reason...
+	out = []
+	
+	#buffer = []
+	b_offset = 0
+	change = defaultdict(int)#[offset] = diff
+	for i in bytecode:
+		if i in "+-<>":
+			#buffer.append(i)
+			if i == "+": change[b_offset] += 1
+			elif i == "-": change[b_offset] -= 1
+			elif i == ">": b_offset += 1
+			elif i == "<": b_offset -= 1
+		else:
+			pos = 0
+			
+			if change:
+				order = sorted(change.items(), key = lambda x: x[0])
+				if b_offset < 0:
+					order = order[::-1]
+				
+				for offset, value in order:
+					if value:
+						if offset > pos:
+							out.append(">"*(offset - pos))
+						else:
+							out.extend("<"*(pos - offset))
+						if value > 0:
+							out.append("+"*value)
+						else:
+							out.append("-"*(-value))
+						pos = offset
+			
+			if b_offset > pos:
+				out.append(">"*(b_offset - pos))
+			elif b_offset < pos:
+				out.append("<"*(pos - b_offset))
+			
+			b_offset = 0
+			change = defaultdict(int)
+			
+			out.append(i)
+	
+	print("before, after :", len(bytecode), len("".join(out)))
+	return "".join(out)
+
+def remove_redundancies(bytecode):
+	#count = 0
+	out = list(bytecode)
+	i = 0
+	while i < len(out)-1:
+		if out[i]+out[i+1] in ("+-", "-+", "<>", "><"):
+			out.pop(i)
+			out.pop(i)
+			#count += 1
+			if i: i -= 1
+		else:
+			i += 1
+	return "".join(out)
 
 class Brainfuck:#creates brainfuck code when commands are done on it
 	def __init__(self):
 		self.bytecode = []
 		self.pos = 0
-	def remove_redundancies(self, bytecode):
-		#count = 0
-		out = list(bytecode)
-		i = 0
-		while i < len(out)-1:
-			if out[i]+out[i+1] in ("+-", "-+", "<>", "><"):
-				out.pop(i)
-				out.pop(i)
-				#count += 1
-				if i: i -= 1
-			else:
-				i += 1
-		return "".join(out)
+		self.waypoints = []
 	def pack(self):
 		return "".join(self.bytecode)
+		#return reflow("".join(self.bytecode))
+	#history management, used for optimisations:
+	def set_waypoint(self):
+		self.waypoints.append((len(self.bytecode), self.pos))
+	def restore_waypoint(self):#performs a pop aswell
+		assert self.waypoints
+		length, pos = self.waypoints.pop()
+		del self.bytecode[length:]
+		self.pos = pos
+	def pop_waypoint(self):
+		assert self.waypoints
+		return self.waypoints.pop()
+	def waypoint_diff(self):
+		assert self.waypoints
+		return len(self.bytecode) - self.waypoints[-1][0]
 	#commands:
 	def write_raw(self, data):#you must leave the cursor at the same position at the end
 		self.bytecode.append(data)
@@ -38,38 +102,57 @@ class Brainfuck:#creates brainfuck code when commands are done on it
 		self.pos = pos
 	def clear(self, pos=None):#set to 0
 		self.goto(pos)
-		self.bytecode.append("[-]")
+		self.bytecode.append("[")
+		self.bytecode.append("-")
+		self.bytecode.append("]")
 	def increment(self, pos, amount=1, helperpos=None):
 		assert pos != helperpos, (pos, helperpos)
 		
-		
-		if helperpos == None or amount <= 15:
+		if helperpos is None:
 			self.goto(pos)
 			self.bytecode.extend(["+"]*(amount))
 		else:
-			inc = int(sqrt(amount))
+			self.set_waypoint()
 			
-			self.set_to(helperpos, inc)
+			root = int(sqrt(amount))
+			
+			self.set_to(helperpos, root)
 			self.bytecode.append("[")
-			self.increment(pos, inc)
+			self.increment(pos, root)
 			self.decrement(helperpos)
 			self.bytecode.append("]")
 			
-			self.increment(pos, amount - inc**2)
+			self.increment(pos, amount - root**2)
+			
+			if self.waypoint_diff() > amount:
+				self.restore_waypoint()
+				self.increment(pos, amount)
+			else:
+				self.pop_waypoint()
 	def decrement(self, pos, amount=1, helperpos=None):
-		assert pos != helperpos
+		assert pos != helperpos, (pos, helperpos)
 		
-		if helperpos == None or amount <= 15:
+		if helperpos is None:
 			self.goto(pos)
 			self.bytecode.extend(["-"]*(amount))
 		else:
-			dec = int(sqrt(amount))
+			self.set_waypoint()
 			
-			self.set_to(helperpos, dec)
+			root = int(sqrt(amount))
+			
+			self.set_to(helperpos, root)
 			self.bytecode.append("[")
-			self.decrement(pos, dec)
+			self.decrement(pos, root)
 			self.decrement(helperpos)
 			self.bytecode.append("]")
+			
+			self.increment(pos, amount - root**2)
+			
+			if self.waypoint_diff() > amount:
+				self.restore_waypoint()
+				self.decrement(pos, amount)
+			else:
+				self.pop_waypoint()
 	def add(self, posa, posb, outputpos, helperpos):
 		assert posa != posb
 		
@@ -358,7 +441,8 @@ class Brainfuck:#creates brainfuck code when commands are done on it
 		self.bytecode.append("]")
 	def set_to(self, pos, value, helperpos=None):
 		self.clear(pos)
-		self.increment(pos, value, helperpos)
+		if value:
+			self.increment(pos, value, helperpos)
 	def move_to(self, sourcepos, destpos, dest_is_clear=False):
 		assert sourcepos != destpos
 		

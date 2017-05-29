@@ -10,7 +10,12 @@ python 3.6 and uses the module plac when standalone.
 * you can only store single integers
 * one line per statement
 * calculations can be done one operand at a time(1 + 2 is ok, 2*2 - 3 is not)
-* `var` : declares a variable
+* `var foo` : declares a variable called foo
+* `array foo 5` : declares a array called foo of size 5
+* `increment variable [amount=1]` : increments a variable by amount
+* `decrement variable [amount=1]` : decrements a variable by amount
+* `fetch foo i -> bar` : Fetches value at position i from array foo and stores it in the variable bar
+* `store bar -> foo i` : Stores the variable bar in position i in the array called foo
 * `if ... then` : start of a if block
 * A value written like `'A'`, including the quotation marks will be converted to integers
 * `func function_name(parameter) do` : begins a function declaration

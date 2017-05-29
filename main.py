@@ -4,7 +4,6 @@ import sys
 from parsing import parse_expressions
 from tokenizer import tokenize_text
 
-
 def main(input, output=None, code_width=70, debug=False):
 	if input == "-":
 		text = sys.stdin.read()
@@ -33,6 +32,7 @@ def main(input, output=None, code_width=70, debug=False):
 	else:
 		with open(output, "w") as f:
 			f.write(bf)
+
 
 if __name__ == '__main__':
 	import plac; plac.call(main)
